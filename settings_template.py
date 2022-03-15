@@ -13,11 +13,13 @@ SYMBOL_LENGTH = 72
 # MQTT Server settings
 # MQTT_HOST needs to be a string
 # MQTT_PORT needs to be an int
+# MQTT_TLS needs to be True or False
 # MQTT_USER needs to be a string
 # MQTT_PASSWORD needs to be a string
 # If no authentication, leave MQTT_USER and MQTT_PASSWORD empty
 MQTT_HOST = '127.0.0.1'
 MQTT_PORT = 1883
+MQTT_TLS = False
 MQTT_USER = ''
 MQTT_PASSWORD = ''
 
