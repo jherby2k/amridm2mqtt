@@ -33,6 +33,10 @@ signal.signal(signal.SIGINT, shutdown)
 auth = None
 if len(settings.MQTT_USER) and len(settings.MQTT_PASSWORD):
 	auth = {'username':settings.MQTT_USER, 'password':settings.MQTT_PASSWORD}
+	
+tls = None
+if settings.MQTT_TLS:
+        tls = {'ca_certs':"/etc/ssl/certs/ca-certificates.crt"}
 
 DEBUG=os.environ.get('DEBUG', '').lower() in ['1', 'true', 't']
 
@@ -43,7 +47,7 @@ def debug_print(*args, **kwargs):
 # send data to MQTT broker defined in settings
 def send_mqtt(topic, payload):
     try:
-        publish.single(topic, payload=payload, qos=0, retain=True, hostname=settings.MQTT_HOST, port=settings.MQTT_PORT, auth=auth, client_id="rtlamr")
+        publish.single(topic, payload=payload, qos=0, retain=True, hostname=settings.MQTT_HOST, port=settings.MQTT_PORT, auth=auth, tls=tls, client_id="rtlamr")
     except Exception as ex:
         print("MQTT Publish Failed: " + str(ex))
 
