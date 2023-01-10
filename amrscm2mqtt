@@ -15,27 +15,21 @@ import settings
 
 # Use signal to shut down gracefully
 def shutdown(signum, frame):
-	debug_print('shutting down')
+	print('shutting down')
 	rtlamr.terminate()
 
 signal.signal(signal.SIGTERM, shutdown)
 
-DEBUG=os.environ.get('DEBUG', '').lower() in ['1', 'true', 't']
-
-def debug_print(*args, **kwargs):
-	if DEBUG:
-		print(*args, **kwargs)
-
 # Start the rtl_tcp program
 with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True):
 	time.sleep(10)
-	debug_print('started rtl_tcp')
+	print('started rtl_tcp')
 
 	# Start the rtlamr program
 	filter_ids = ','.join(map(str, settings.WATCHED_METERS))
 	rtlamr_cmd = [settings.RTLAMR, '-msgtype=scm', '-format=csv', '-filterid=' + filter_ids, '-symbollength=' + str(settings.SYMBOL_LENGTH)]
 	with subprocess.Popen(rtlamr_cmd, stdout=subprocess.PIPE, universal_newlines=True) as rtlamr:
-		debug_print('started rtlamr')
+		print('started rtlamr')
 
 		# Connect to the MQTT broker
 		client = mqtt.Client('rtlamr')
@@ -47,7 +41,7 @@ with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, st
 		client.connect(settings.MQTT_HOST, settings.MQTT_PORT)
 		client.loop_start()
 		client.publish('meters/availability', 'online', retain=True)
-		debug_print('connected to broker. Setting availability to "online"')
+		print('connected to broker. Setting availability to "online"')
 
 		# Process messages in a loop
 		last_readings = {}
@@ -67,17 +61,17 @@ with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, st
 				continue
 			last_readings[meter_id] = reading
 
-			debug_print('sending meter {} reading: {}'.format(meter_id, reading))
+			print('sending meter {} reading: {}'.format(meter_id, reading))
 			result = client.publish('meters/{}/reading'.format(meter_id), reading, retain=True)
 
 			# If the connection died, reestablish it (last message will still be processed)
 			if result.rc == 4: #MQTT_ERR_NO_CONN
 				client.reconnect()
 				client.publish('meters/availability', 'online', retain=True)
-				debug_print('reconnected to broker')
+				print('reconnected to broker')
 
 		# Clean up after rtlamr exits
-		debug_print('setting availability to "offline"')
+		print('setting availability to "offline"')
 		result = client.publish('meters/availability', 'offline', retain=True)
 		result.wait_for_publish()
 		client.disconnect()
