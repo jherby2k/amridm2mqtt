@@ -10,7 +10,8 @@ TODO: Video for Home Assistant
 
 This fork is specifically tuned for reading SCM messages (but can easily be changed back to IDM with a few edits)
 
-- symbol lengths are tuned (and can be adjusted) to reduce CPU consumption
+- Supports TLS (server-side) for encrypted communication
+- Symbol lengths are tuned (and can be adjusted) to reduce CPU consumption
 - Uses a single MQTT session running in a background thread
 - Only updates MQTT when the value changes
 - More robust availability handling
