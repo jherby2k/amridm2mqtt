@@ -19,6 +19,7 @@ import settings
 
 # uses signal to shutdown and hard kill opened processes and self
 def shutdown(signum, frame):
+<<<<<<< HEAD
 	running = False
 	rtltcp.send_signal(15)
 	rtlamr.send_signal(15)
@@ -29,6 +30,17 @@ def shutdown(signum, frame):
 	client.disconnect()
 	client.loop_stop()
 	sys.exit(0)
+=======
+    client.publish('meters/availability', 'offline', retain=True)
+    client.disconnect()
+    client.loop_stop()
+    rtltcp.send_signal(15)
+    rtlamr.send_signal(15)
+    time.sleep(1)
+    rtltcp.send_signal(9)
+    rtlamr.send_signal(9)
+    sys.exit(0)
+>>>>>>> e51862cc785d5fb7a9cf47b62e6ff88353241931
 
 signal.signal(signal.SIGTERM, shutdown)
 signal.signal(signal.SIGINT, shutdown)
@@ -39,8 +51,11 @@ def debug_print(*args, **kwargs):
 	if DEBUG:
 		print(*args, **kwargs)
 
+<<<<<<< HEAD
 running = True
 
+=======
+>>>>>>> e51862cc785d5fb7a9cf47b62e6ff88353241931
 # start the rtl_tcp program
 rtltcp = subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
 time.sleep(10)
@@ -53,6 +68,7 @@ rtlamr = subprocess.Popen(rtlamr_cmd, stdout=subprocess.PIPE, universal_newlines
 debug_print('started rtlamr')
 
 # connect to the MQTT broker
+<<<<<<< HEAD
 client = mqtt.Client('rtlamr')
 if settings.MQTT_TLS:
 	client.tls_set()
@@ -92,3 +108,36 @@ while running:
 		client.reconnect()
 		client.publish('meters/availability', 'online', retain=True)
 		debug_print('reconnected to broker')
+=======
+client = mqtt.Client(client_id='rtlamr')
+if settings.MQTT_TLS:
+        client.tls_set()
+if len(settings.MQTT_USER) and len(settings.MQTT_PASSWORD):
+        client.username_pw_set(settings.MQTT_USER, settings.MQTT_PASSWORD)
+client.will_set('meters/availability', 'offline', retain=True)
+client.connect(settings.MQTT_HOST, settings.MQTT_PORT)
+client.publish('meters/availability', 'online', retain=True)
+client.loop_start()
+
+while True:
+    try:
+        amrline = rtlamr.stdout.readline().strip()
+        flds = amrline.split(',')
+
+        if len(flds) != 9:
+            # proper SCM results have 9 fields
+            continue
+
+        # make sure the meter id is one we want
+        meter_id = int(flds[3])
+
+        # get some required info: current meter reading
+        reading = int(flds[7])
+
+        debug_print('Sending meter {} reading: {}'.format(meter_id, reading))
+        client.publish('meters/{}/reading'.format(meter_id), reading, retain=True)
+
+    except Exception as e:
+        debug_print('Exception squashed! {}: {}', e.__class__.__name__, e)
+        time.sleep(2)
+>>>>>>> e51862cc785d5fb7a9cf47b62e6ff88353241931

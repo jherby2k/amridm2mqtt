@@ -17,7 +17,7 @@ Example Topic:
 
 ## Requirements
 
-Tested under Raspbian GNU/Linux 9.3 (stretch)
+Tested under Raspberry Pi OS (32-bit) (Debian Bullseye)
 
 ### rtl-sdr package
 
@@ -93,10 +93,6 @@ Edit file and replace with appropriate values for your configuration
 
 `sudo nano /opt/amrscm2mqtt/settings.py`
 
-### TODO
-
-TLS setup is not performed, so you can only use the non-secure TCP port which is 1883 by default.
-
 ### Install Service and Start
 
 Copy amrscm2mqtt service configuration into systemd config
@@ -120,15 +116,15 @@ Set amridm2mqtt to run on startup
 To use these values in Home Assistant,
 
 ```yaml
-sensor:
-  - platform: mqtt
-    state_topic: "meters/12345678/reading"
-    name: "Gas Meter"
-    unit_of_measurement: m³
-    device_class: gas
-    state_class: total
-    availability_topic: "meters/availability"
-    value_template: '{{ (value | int(0) * 0.0283) | round(2) }}'  # converts cubic feet to m³
+mqtt:
+  sensor:
+    - name: Gas Meter
+      state_topic: meters/12345678/reading
+      availability_topic: meters/availability
+      unit_of_measurement: m³
+      device_class: gas
+      state_class: total
+      value_template: '{{ (value | int(0) * 0.0283) | round(2) }}'  # Optional, converts readings in cubic feet to m³
 ```
 
 ## Testing
