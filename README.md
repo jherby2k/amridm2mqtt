@@ -1,4 +1,4 @@
-# AMRIDM2MQTT: Send AMR/ERT Power Meter Data Over MQTT
+# AMRSCM2MQTT: Send AMR/ERT Power Meter Data Over MQTT
 
 ##### Copyright (c) 2018 Ben Johnson. Distributed under MIT License.
 
@@ -8,9 +8,12 @@ TODO: Video for Home Assistant
 
 ## Changes from Original Project
 
-This fork is specifically for tuned for reading SCM messages.
+This fork is specifically tuned for reading SCM messages (but can easily be changed back to IDM with a few edits)
 
 - symbol lengths are tuned (and can be adjusted) to reduce CPU consumption
+- Uses a single MQTT session running in a background thread
+- Only updates MQTT when the value changes
+- More robust availability handling
 
 Example Topic:
 `meters/32109876/reading`
@@ -25,11 +28,11 @@ Install RTL-SDR package
 
 `sudo apt-get install rtl-sdr`
 
-Set permissions on rtl-sdr device
+Set permissions on rtl-sdr device (check your device info via lsusb)
 
 /etc/udev/rules.d/rtl-sdr.rules
 
-`SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="0666"`
+`SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE:="0666"`
 
 Prevent tv tuner drivers from using rtl-sdr device
 
