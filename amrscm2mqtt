@@ -1,37 +1,24 @@
 #!/usr/bin/env python3
 '''
-Runs rtlamr to watch for SDM broadcasts from power meter. If meter id
-is in the list, usage is sent to 'meters/{meter id}/reading'
-topic on the MQTT broker specified in settings.
-
-WATCHED_METERS = A Python list indicating those meter IDs to record and post.
-MQTT_HOST = String containing the MQTT server address.
-MQTT_PORT = An int containing the port the MQTT server is active on.
+Runs rtlamr to watch for SDM broadcasts from utility meters. If the meter id
+is in the list, usage is sent to an MQTT broker under a
+'meters/{meter id}/reading' topic. All required settings should be specified in
+settings.py.
 
 '''
 import os
 import subprocess
 import signal
-import sys
 import time
 import paho.mqtt.client as mqtt
 import settings
 
-# uses signal to shutdown and hard kill opened processes and self
+# Use signal to shut down gracefully
 def shutdown(signum, frame):
-	running = False
-	rtltcp.send_signal(15)
-	rtlamr.send_signal(15)
-	time.sleep(1)
-	rtltcp.send_signal(9)
-	rtlamr.send_signal(9)
-	client.publish('meters/availability', 'offline', retain=True)
-	client.disconnect()
-	client.loop_stop()
-	sys.exit(0)
+	debug_print('shutting down')
+	rtlamr.terminate()
 
 signal.signal(signal.SIGTERM, shutdown)
-signal.signal(signal.SIGINT, shutdown)
 
 DEBUG=os.environ.get('DEBUG', '').lower() in ['1', 'true', 't']
 
@@ -39,56 +26,59 @@ def debug_print(*args, **kwargs):
 	if DEBUG:
 		print(*args, **kwargs)
 
-running = True
+# Start the rtl_tcp program
+with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True):
+	time.sleep(10)
+	debug_print('started rtl_tcp')
 
-# start the rtl_tcp program
-rtltcp = subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
-time.sleep(10)
-debug_print('started rtl_tcp')
+	# Start the rtlamr program
+	filter_ids = ','.join(map(str, settings.WATCHED_METERS))
+	rtlamr_cmd = [settings.RTLAMR, '-msgtype=scm', '-format=csv', '-filterid=' + filter_ids, '-symbollength=' + str(settings.SYMBOL_LENGTH)]
+	with subprocess.Popen(rtlamr_cmd, stdout=subprocess.PIPE, universal_newlines=True) as rtlamr:
+		debug_print('started rtlamr')
 
-# start the rtlamr program
-filter_ids = ','.join(map(str, settings.WATCHED_METERS))
-rtlamr_cmd = [settings.RTLAMR, '-msgtype=scm', '-format=csv', '-filterid=' + filter_ids, '-symbollength=' + str(settings.SYMBOL_LENGTH)]
-rtlamr = subprocess.Popen(rtlamr_cmd, stdout=subprocess.PIPE, universal_newlines=True)
-debug_print('started rtlamr')
-
-# connect to the MQTT broker
-client = mqtt.Client('rtlamr')
-if settings.MQTT_TLS:
-	client.tls_set()
-if len(settings.MQTT_USER) and len(settings.MQTT_PASSWORD):
-	client.username_pw_set(settings.MQTT_USER, settings.MQTT_PASSWORD)
-client.will_set('meters/availability', 'offline', retain=True)
-client.connect(settings.MQTT_HOST, settings.MQTT_PORT)
-client.loop_start()
-client.publish('meters/availability', 'online', retain=True)
-debug_print('connected to broker')
-
-last_readings = {}
-while running:
-	amrline = rtlamr.stdout.readline().strip()
-	flds = amrline.split(',')
-
-	if len(flds) != 9:
-		# proper SCM results have 9 fields
-		continue
-
-	# make sure the meter id is one we want
-	meter_id = int(flds[3])
-
-	# get some required info: current meter reading
-	reading = int(flds[7])
-
-	# don't send a reading if the value hasn't changed
-	if meter_id in last_readings.keys():
-		if reading == last_readings[meter_id]:
-			continue
-	last_readings[meter_id] = reading
-
-	debug_print('Sending meter {} reading: {}'.format(meter_id, reading))
-	result = client.publish('meters/{}/reading'.format(meter_id), reading, retain=True)
-
-	if result.rc == 4: #MQTT_ERR_NO_CONN
-		client.reconnect()
+		# Connect to the MQTT broker
+		client = mqtt.Client('rtlamr')
+		if settings.MQTT_TLS:
+			client.tls_set()
+		if len(settings.MQTT_USER) and len(settings.MQTT_PASSWORD):
+			client.username_pw_set(settings.MQTT_USER, settings.MQTT_PASSWORD)
+		client.will_set('meters/availability', 'offline', retain=True)
+		client.connect(settings.MQTT_HOST, settings.MQTT_PORT)
+		client.loop_start()
 		client.publish('meters/availability', 'online', retain=True)
-		debug_print('reconnected to broker')
+		debug_print('connected to broker. Setting availability to "online"')
+
+		# Process messages in a loop
+		last_readings = {}
+		for line in rtlamr.stdout:
+			fields = line.strip().split(',')
+
+			# Valid SCM results have 9 fields
+			if len(fields) != 9:
+				continue
+
+			# Parse the results
+			meter_id = int(fields[3])
+			reading = int(fields[7])
+
+			# Don't send a reading if the value hasn't changed
+			if meter_id in last_readings.keys() and reading == last_readings[meter_id]:
+				continue
+			last_readings[meter_id] = reading
+
+			debug_print('sending meter {} reading: {}'.format(meter_id, reading))
+			result = client.publish('meters/{}/reading'.format(meter_id), reading, retain=True)
+
+			# If the connection died, reestablish it (last message will still be processed)
+			if result.rc == 4: #MQTT_ERR_NO_CONN
+				client.reconnect()
+				client.publish('meters/availability', 'online', retain=True)
+				debug_print('reconnected to broker')
+
+		# Clean up after rtlamr exits
+		debug_print('setting availability to "offline"')
+		result = client.publish('meters/availability', 'offline', retain=True)
+		result.wait_for_publish()
+		client.disconnect()
+		client.loop_stop()
