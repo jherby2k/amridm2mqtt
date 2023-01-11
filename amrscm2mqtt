@@ -6,17 +6,29 @@ is in the list, usage is sent to an MQTT broker under a
 settings.py.
 
 '''
+import backoff
 import os
-import subprocess
-import signal
-import time
 import paho.mqtt.client as mqtt
 import settings
+import signal
+import ssl
+import subprocess
+import sys
+import time
 
 # Use signal to shut down gracefully
 def shutdown(signum, frame):
 	print('shutting down')
 	rtlamr.terminate()
+
+@backoff.on_exception(
+	backoff.expo,
+	(ConnectionRefusedError, ssl.SSLEOFError),
+	max_time=300)
+def try_reconnect(client):
+	print('attempting to reconnect to broker...')
+	client.reconnect()
+	print('reconnected successfully')
 
 signal.signal(signal.SIGTERM, shutdown)
 
@@ -31,48 +43,56 @@ with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, st
 	with subprocess.Popen(rtlamr_cmd, stdout=subprocess.PIPE, universal_newlines=True) as rtlamr:
 		print('started rtlamr')
 
-		# Connect to the MQTT broker
+		# Configure the MQTT client
 		client = mqtt.Client('rtlamr')
 		if settings.MQTT_TLS:
 			client.tls_set()
 		if len(settings.MQTT_USER) and len(settings.MQTT_PASSWORD):
 			client.username_pw_set(settings.MQTT_USER, settings.MQTT_PASSWORD)
 		client.will_set('meters/availability', 'offline', retain=True)
+
+		# Connect to the broker
+		print('connecting to the broker...')
 		client.connect(settings.MQTT_HOST, settings.MQTT_PORT)
 		client.loop_start()
 		client.publish('meters/availability', 'online', retain=True)
-		print('connected to broker. Setting availability to "online"')
+		print('connected successfully')
 
 		# Process messages in a loop
-		last_readings = {}
-		for line in rtlamr.stdout:
-			fields = line.strip().split(',')
+		try:
+			last_readings = {}
+			for line in rtlamr.stdout:
+				fields = line.strip().split(',')
 
-			# Valid SCM results have 9 fields
-			if len(fields) != 9:
-				continue
+				# Valid SCM results have 9 fields
+				if len(fields) != 9:
+					continue
 
-			# Parse the results
-			meter_id = int(fields[3])
-			reading = int(fields[7])
+				# Parse the results
+				meter_id = int(fields[3])
+				reading = int(fields[7])
 
-			# Don't send a reading if the value hasn't changed
-			if meter_id in last_readings.keys() and reading == last_readings[meter_id]:
-				continue
-			last_readings[meter_id] = reading
+				# Don't send a reading if the value hasn't changed
+				if meter_id in last_readings.keys() and reading == last_readings[meter_id]:
+					continue
 
-			print('sending meter {} reading: {}'.format(meter_id, reading))
-			result = client.publish('meters/{}/reading'.format(meter_id), reading, retain=True)
+				print('sending meter {} reading: {}'.format(meter_id, reading))
 
-			# If the connection died, reestablish it (last message will still be processed)
-			if result.rc == 4: #MQTT_ERR_NO_CONN
-				client.reconnect()
+				result = client.publish('meters/{}/reading'.format(meter_id), reading, retain=True)
+				if result.rc == mqtt.MQTT_ERR_SUCCESS:
+					last_readings[meter_id] = reading
+				elif result.rc == mqtt.MQTT_ERR_NO_CONN:
+					try_reconnect(client)
+
+				# If the broker restarted, LWT may have taken effect and marked us as offline
 				client.publish('meters/availability', 'online', retain=True)
-				print('reconnected to broker')
-
-		# Clean up after rtlamr exits
-		print('setting availability to "offline"')
-		result = client.publish('meters/availability', 'offline', retain=True)
-		result.wait_for_publish()
-		client.disconnect()
-		client.loop_stop()
+		except:
+			print(sys.exc_info())
+			raise
+		finally:
+                        # Clean up after rtlamr exits
+                        print('disconnecting from broker...')
+                        result = client.publish('meters/availability', 'offline', retain=True)
+                        result.wait_for_publish()
+                        client.disconnect()
+                        client.loop_stop()
