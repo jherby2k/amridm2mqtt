@@ -49,9 +49,9 @@ Prevent tv tuner drivers from using rtl-sdr device
 
 Install pip for python 3
 
-`sudo apt-get install python3-pip`
+`sudo apt-get install python3-pip backoff`
 
-Install paho-mqtt package for python3
+Install paho-mqtt and backoff packages for python3
 
 `sudo pip3 install paho-mqtt`
 
