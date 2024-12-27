@@ -44,7 +44,7 @@ with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, st
 		print('started rtlamr')
 
 		# Configure the MQTT client
-		client = mqtt.Client('rtlamr')
+		client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, 'rtlamr')
 		if settings.MQTT_TLS:
 			client.tls_set()
 		if len(settings.MQTT_USER) and len(settings.MQTT_PASSWORD):
