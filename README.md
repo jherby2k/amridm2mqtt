@@ -8,7 +8,7 @@ TODO: Video for Home Assistant
 
 ## Changes from Original Project
 
-This fork is specifically tuned for reading SCM messages (but can easily be changed back to IDM with a few edits)
+This fork is specifically tuned for reading SCM/SCM+ messages (but can easily be changed back to IDM with a few edits)
 
 - Supports TLS (server-side) for encrypted communication
 - Symbol lengths are tuned (and can be adjusted) to reduce CPU consumption

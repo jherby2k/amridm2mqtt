@@ -39,7 +39,7 @@ with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, st
 
 	# Start the rtlamr program
 	filter_ids = ','.join(map(str, settings.WATCHED_METERS))
-	rtlamr_cmd = [settings.RTLAMR, '-msgtype=scm', '-format=csv', '-filterid=' + filter_ids, '-symbollength=' + str(settings.SYMBOL_LENGTH)]
+	rtlamr_cmd = [settings.RTLAMR, '-msgtype=scm,scm+', '-format=csv', '-filterid=' + filter_ids, '-symbollength=' + str(settings.SYMBOL_LENGTH)]
 	with subprocess.Popen(rtlamr_cmd, stdout=subprocess.PIPE, universal_newlines=True) as rtlamr:
 		print('started rtlamr')
 
@@ -65,12 +65,17 @@ with subprocess.Popen([settings.RTL_TCP + " > /dev/null 2>&1 &"], shell=True, st
 				fields = line.strip().split(',')
 
 				# Valid SCM results have 9 fields
-				if len(fields) != 9:
-					continue
+				if len(fields) == 9:
+					meter_id = int(fields[3])
+					reading = int(fields[7])
 
-				# Parse the results
-				meter_id = int(fields[3])
-				reading = int(fields[7])
+				# SCM+ has 10
+				elif len(fields) == 10:
+					meter_id = int(fields[6])
+					reading = int(fields[7])
+				
+				else:
+					continue
 
 				# Don't send a reading if the value hasn't changed
 				if meter_id in last_readings.keys() and reading == last_readings[meter_id]:
